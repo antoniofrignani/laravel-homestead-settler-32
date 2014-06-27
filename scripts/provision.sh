@@ -13,7 +13,9 @@ apt-get install -y software-properties-common
 apt-add-repository ppa:nginx/stable -y
 apt-add-repository ppa:rwky/redis -y
 apt-add-repository ppa:chris-lea/node.js -y
-apt-add-repository ppa:ondrej/php5 -y
+# removing ondrej ppa since it prevents installation of php5-memcached
+# this will install php 5.5.9 instead of php 5.5.12
+# apt-add-repository ppa:ondrej/php5 -y
 
 # Update Package Lists
 
@@ -32,13 +34,15 @@ pip install python-simple-hipchat
 
 # Set My Timezone
 
-ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 
 # Install PHP Stuffs
 
 apt-get install -y php5-cli php5-dev php-pear \
 php5-mysql php5-pgsql php5-sqlite \
-php5-apcu php5-json php5-curl php5-dev php5-gd php5-gmp php5-imap php5-mcrypt php5-xdebug
+php5-apcu php5-json php5-curl php5-dev php5-gd \
+php5-gmp php5-imap php5-mcrypt php5-xdebug \
+php5-memcached php5-redis
 
 # Make MCrypt Available
 
@@ -47,7 +51,7 @@ sudo php5enmod mcrypt
 
 # Install Mailparse PECL Extension
 
-pecl install mailparse
+pecl install -Z mailparse
 echo "extension=mailparse.so" > /etc/php5/mods-available/mailparse.ini
 ln -s /etc/php5/mods-available/mailparse.ini /etc/php5/cli/conf.d/20-mailparse.ini
 
@@ -91,6 +95,11 @@ sed -i "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/" /etc/php5/fpm/php.ini
 sed -i "s/memory_limit = .*/memory_limit = 512M/" /etc/php5/fpm/php.ini
 sed -i "s/;date.timezone.*/date.timezone = UTC/" /etc/php5/fpm/php.ini
 
+# Enable Remote xdebug
+echo "xdebug.remote_enable = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+echo "xdebug.remote_connect_back = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+echo "xdebug.remote_port = 9000" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+
 # Set The Nginx & PHP-FPM User
 
 sed -i "s/user www-data;/user vagrant;/" /etc/nginx/nginx.conf
@@ -119,6 +128,10 @@ npm install -g grunt-cli
 npm install -g gulp
 npm install -g bower
 
+# Install SQLite
+
+apt-get install -y sqlite3 libsqlite3-dev
+
 # Install MySQL
 
 debconf-set-selections <<< "mysql-server mysql-server/root_password password secret"
@@ -128,19 +141,19 @@ apt-get install -y mysql-server
 # Configure MySQL Remote Access
 
 sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 10.0.2.15/' /etc/mysql/my.cnf
-mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO root@'10.0.2.2' IDENTIFIED BY 'secret';"
+mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO root@'10.0.2.2' IDENTIFIED BY 'secret' WITH GRANT OPTION;"
 service mysql restart
 
 mysql --user="root" --password="secret" -e "CREATE USER 'homestead'@'10.0.2.2' IDENTIFIED BY 'secret';"
-mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO 'homestead'@'10.0.2.2' IDENTIFIED BY 'secret';"
-mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret';"
+mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO 'homestead'@'10.0.2.2' IDENTIFIED BY 'secret' WITH GRANT OPTION;"
+mysql --user="root" --password="secret" -e "GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION;"
 mysql --user="root" --password="secret" -e "FLUSH PRIVILEGES;"
 mysql --user="root" --password="secret" -e "CREATE DATABASE homestead;"
 service mysql restart
 
 # Install Postgres
 
-apt-get install -y postgresql
+apt-get install -y postgresql postgresql-contrib
 
 # Configure Postgres Remote Access
 
@@ -152,7 +165,7 @@ service postgresql restart
 
 # Install A Few Other Things
 
-apt-get install -y redis-server beanstalkd
+apt-get install -y redis-server memcached beanstalkd
 
 # Configure Beanstalkd
 
